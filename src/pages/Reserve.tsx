@@ -4,6 +4,7 @@ import { api } from '../api/client';
 
 type Seat = {
   id: number;
+  name: string;
   seatNumber: string;
   reserved: boolean;
 };
@@ -13,10 +14,12 @@ export default function Reserve() {
   const navigate = useNavigate();
   const location = useLocation();
   const [seats, setSeats] = useState<Seat[]>([]);
+  const [trainName, setTrainName] = useState('');
   const [selectedSeat, setSelectedSeat] = useState((location.state as any)?.selectedSeat || '');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(0);
+  const [columnGroup, setColumnGroup] = useState(0); // 0: ABCD, 1: EFGH
   const seatsPerPage = 20; // 각 행당 최대 좌석 수
 
   useEffect(() => {
@@ -25,6 +28,10 @@ export default function Reserve() {
         try {
           const res = await api.get(`/api/v1/seats?trainId=${trainId}`);
           setSeats(res.data);
+          // Extract train name from first seat
+          if (res.data && res.data.length > 0 && res.data[0].name) {
+            setTrainName(res.data[0].name);
+          }
         } catch (e: any) {
           setError(e?.response?.data?.message || '좌석 정보를 불러오지 못했습니다');
         } finally {
@@ -38,9 +45,12 @@ export default function Reserve() {
   useEffect(() => {
     if (selectedSeat && seats.length > 0) {
       // Group seats by letter to find the seat's position
-      const seatsByRow: { [key: string]: Seat[] } = { A: [], B: [], C: [], D: [] };
+      const allLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+      const seatsByRow: { [key: string]: Seat[] } = {};
+      allLetters.forEach(letter => seatsByRow[letter] = []);
+
       seats.forEach((seat) => {
-        const letter = seat.seatNumber.match(/[A-D]/i)?.[0]?.toUpperCase();
+        const letter = seat.seatNumber.match(/[A-Z]/i)?.[0]?.toUpperCase();
         if (letter && seatsByRow[letter]) {
           seatsByRow[letter].push(seat);
         }
@@ -56,12 +66,18 @@ export default function Reserve() {
       });
 
       // Find the selected seat's index in its row
-      const letter = selectedSeat.match(/[A-D]/i)?.[0]?.toUpperCase();
+      const letter = selectedSeat.match(/[A-Z]/i)?.[0]?.toUpperCase();
       if (letter && seatsByRow[letter]) {
         const seatIndex = seatsByRow[letter].findIndex(s => s.seatNumber === selectedSeat);
         if (seatIndex !== -1) {
           const pageNum = Math.floor(seatIndex / seatsPerPage);
           setCurrentPage(pageNum);
+          // Set column group based on letter
+          const letterGroups = ['ABCD', 'EFGH', 'IJKL', 'MNOP', 'QRST', 'UVWX', 'YZ'];
+          const groupIndex = letterGroups.findIndex(group => group.includes(letter));
+          if (groupIndex !== -1) {
+            setColumnGroup(groupIndex);
+          }
         }
       }
     }
@@ -76,11 +92,14 @@ export default function Reserve() {
 
   if (loading) return <p className="loading-text">좌석 정보를 불러오는 중...</p>;
 
-  // Group seats by letter (A, B, C, D)
-  const seatsByRow: { [key: string]: Seat[] } = { A: [], B: [], C: [], D: [] };
+  // Group seats by letter (A-Z)
+  const allLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+  const seatsByRow: { [key: string]: Seat[] } = {};
+  allLetters.forEach(letter => seatsByRow[letter] = []);
+
   seats.forEach((seat) => {
     // Extract letter from seat number (supports both "1A" and "A1" formats)
-    const letter = seat.seatNumber.match(/[A-D]/i)?.[0]?.toUpperCase();
+    const letter = seat.seatNumber.match(/[A-Z]/i)?.[0]?.toUpperCase();
     if (letter && seatsByRow[letter]) {
       seatsByRow[letter].push(seat);
     }
@@ -101,6 +120,25 @@ export default function Reserve() {
   const startIdx = currentPage * seatsPerPage;
   const endIdx = startIdx + seatsPerPage;
 
+  // Determine which columns to show based on columnGroup
+  const letterGroups = ['ABCD', 'EFGH', 'IJKL', 'MNOP', 'QRST', 'UVWX', 'YZ'];
+  const currentRows = letterGroups[columnGroup].split('');
+
+  // Find the last group with seats
+  let lastGroupWithSeats = 0;
+  for (let i = letterGroups.length - 1; i >= 0; i--) {
+    const hasSeats = letterGroups[i].split('').some(letter => seatsByRow[letter].length > 0);
+    if (hasSeats) {
+      lastGroupWithSeats = i;
+      break;
+    }
+  }
+
+  // Check if there are any seats beyond ABCD
+  const hasMultipleGroups = letterGroups.slice(1).some(group =>
+    group.split('').some(letter => seatsByRow[letter].length > 0)
+  );
+
   return (
     <div style={{ maxWidth: 900, margin: '0 auto' }}>
       <div style={{ textAlign: 'center', marginBottom: 32 }}>
@@ -118,12 +156,63 @@ export default function Reserve() {
       }}>
         <span style={{ color: 'var(--text-secondary)', fontSize: '0.9em' }}>열차 번호</span>
         <div style={{ fontSize: '1.2em', fontWeight: 600, color: 'var(--primary-color)', marginTop: 4 }}>
-          {trainId}
+          {trainName || trainId}
         </div>
       </div>
 
       {/* Seat Selection Grid - KTX Style */}
       <div className="card" style={{ padding: 32, marginBottom: 24 }}>
+        {/* Column Group Toggle */}
+        {hasMultipleGroups && (
+          <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, marginBottom: 24 }}>
+            <button
+              type="button"
+              onClick={() => setColumnGroup(prev => Math.max(0, prev - 1))}
+              disabled={columnGroup === 0}
+              style={{
+                padding: '10px 20px',
+                borderRadius: 6,
+                border: 'none',
+                backgroundColor: columnGroup === 0 ? '#BDBDBD' : 'var(--primary-color)',
+                color: 'white',
+                fontWeight: 600,
+                cursor: columnGroup === 0 ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s ease',
+                fontSize: '1.2em'
+              }}
+            >
+              ←
+            </button>
+            <div style={{
+              minWidth: 120,
+              textAlign: 'center',
+              fontWeight: 600,
+              fontSize: '1.1em',
+              color: 'var(--primary-color)'
+            }}>
+              {letterGroups[columnGroup]}
+            </div>
+            <button
+              type="button"
+              onClick={() => setColumnGroup(prev => Math.min(lastGroupWithSeats, prev + 1))}
+              disabled={columnGroup === lastGroupWithSeats}
+              style={{
+                padding: '10px 20px',
+                borderRadius: 6,
+                border: 'none',
+                backgroundColor: columnGroup === lastGroupWithSeats ? '#BDBDBD' : 'var(--primary-color)',
+                color: 'white',
+                fontWeight: 600,
+                cursor: columnGroup === lastGroupWithSeats ? 'not-allowed' : 'pointer',
+                transition: 'all 0.2s ease',
+                fontSize: '1.2em'
+              }}
+            >
+              →
+            </button>
+          </div>
+        )}
+
         <div style={{ marginBottom: 24, display: 'flex', gap: 16, justifyContent: 'center', flexWrap: 'wrap' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <div style={{ width: 24, height: 24, backgroundColor: '#E0E0E0', borderRadius: 4, border: '1px solid var(--border-color)' }}></div>
@@ -141,184 +230,72 @@ export default function Reserve() {
 
         {/* Seat layout by rows */}
         <div style={{ margin: '0 auto', maxWidth: '100%', overflowX: 'auto' }}>
-          {/* Row A */}
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-              <div style={{
-                width: 40,
-                fontWeight: 700,
-                fontSize: '1.1em',
-                color: 'var(--primary-color)',
-                textAlign: 'center'
-              }}>A</div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {seatsByRow['A'].slice(startIdx, endIdx).map((seat) => (
-                  <button
-                    key={seat.id}
-                    type="button"
-                    disabled={seat.reserved}
-                    onClick={() => setSelectedSeat(seat.seatNumber)}
-                    style={{
-                      padding: '12px 16px',
-                      borderRadius: 6,
-                      border: selectedSeat === seat.seatNumber ? '2px solid var(--primary-color)' : seat.reserved ? '1px solid #E57373' : '1px solid var(--border-color)',
-                      backgroundColor: seat.reserved ? '#E57373' : selectedSeat === seat.seatNumber ? 'var(--primary-color)' : '#E0E0E0',
-                      color: seat.reserved || selectedSeat === seat.seatNumber ? 'white' : 'var(--text-primary)',
-                      fontWeight: 600,
-                      fontSize: '0.9em',
-                      cursor: seat.reserved ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.2s ease',
-                      boxShadow: selectedSeat === seat.seatNumber ? 'var(--shadow-md)' : 'none',
-                      transform: selectedSeat === seat.seatNumber ? 'scale(1.05)' : 'scale(1)',
-                      opacity: seat.reserved ? 0.85 : 1,
-                      minWidth: '60px'
-                    }}
-                  >
-                    {seat.seatNumber}
-                  </button>
-                ))}
+          {currentRows.map((row, idx) => (
+            <div key={row}>
+              {/* Row */}
+              <div style={{ marginBottom: idx === 1 ? 20 : 12 }}>
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+                  <div style={{
+                    width: 40,
+                    fontWeight: 700,
+                    fontSize: '1.1em',
+                    color: 'var(--primary-color)',
+                    textAlign: 'center',
+                    flexShrink: 0,
+                    marginRight: 16
+                  }}>{row}</div>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(20, 68px)', gap: 8 }}>
+                    {seatsByRow[row].slice(startIdx, endIdx).map((seat) => (
+                      <button
+                        key={seat.id}
+                        type="button"
+                        disabled={seat.reserved}
+                        onClick={() => setSelectedSeat(seat.seatNumber)}
+                        style={{
+                          padding: '12px 16px',
+                          borderRadius: 6,
+                          border: selectedSeat === seat.seatNumber ? '2px solid var(--primary-color)' : seat.reserved ? '1px solid #E57373' : '1px solid var(--border-color)',
+                          backgroundColor: seat.reserved ? '#E57373' : selectedSeat === seat.seatNumber ? 'var(--primary-color)' : '#E0E0E0',
+                          color: seat.reserved || selectedSeat === seat.seatNumber ? 'white' : 'var(--text-primary)',
+                          fontWeight: 600,
+                          fontSize: '0.9em',
+                          cursor: seat.reserved ? 'not-allowed' : 'pointer',
+                          transition: 'all 0.2s ease',
+                          boxShadow: selectedSeat === seat.seatNumber ? 'var(--shadow-md)' : 'none',
+                          transform: selectedSeat === seat.seatNumber ? 'scale(1.05)' : 'scale(1)',
+                          opacity: seat.reserved ? 0.85 : 1,
+                          minWidth: '60px'
+                        }}
+                      >
+                        {seat.seatNumber}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
-            </div>
-          </div>
 
-          {/* Row B */}
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-              <div style={{
-                width: 40,
-                fontWeight: 700,
-                fontSize: '1.1em',
-                color: 'var(--primary-color)',
-                textAlign: 'center'
-              }}>B</div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {seatsByRow['B'].slice(startIdx, endIdx).map((seat) => (
-                  <button
-                    key={seat.id}
-                    type="button"
-                    disabled={seat.reserved}
-                    onClick={() => setSelectedSeat(seat.seatNumber)}
-                    style={{
-                      padding: '12px 16px',
-                      borderRadius: 6,
-                      border: selectedSeat === seat.seatNumber ? '2px solid var(--primary-color)' : seat.reserved ? '1px solid #E57373' : '1px solid var(--border-color)',
-                      backgroundColor: seat.reserved ? '#E57373' : selectedSeat === seat.seatNumber ? 'var(--primary-color)' : '#E0E0E0',
-                      color: seat.reserved || selectedSeat === seat.seatNumber ? 'white' : 'var(--text-primary)',
-                      fontWeight: 600,
-                      fontSize: '0.9em',
-                      cursor: seat.reserved ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.2s ease',
-                      boxShadow: selectedSeat === seat.seatNumber ? 'var(--shadow-md)' : 'none',
-                      transform: selectedSeat === seat.seatNumber ? 'scale(1.05)' : 'scale(1)',
-                      opacity: seat.reserved ? 0.85 : 1,
-                      minWidth: '60px'
-                    }}
-                  >
-                    {seat.seatNumber}
-                  </button>
-                ))}
-              </div>
+              {/* Aisle between 2nd and 3rd row */}
+              {idx === 1 && (
+                <div style={{
+                  borderTop: '2px dashed var(--border-color)',
+                  margin: '20px 0',
+                  position: 'relative'
+                }}>
+                  <span style={{
+                    position: 'absolute',
+                    top: -12,
+                    left: '50%',
+                    transform: 'translateX(-50%)',
+                    backgroundColor: 'var(--card-background)',
+                    padding: '0 16px',
+                    color: 'var(--text-secondary)',
+                    fontSize: '0.85em',
+                    fontWeight: 600
+                  }}>통로</span>
+                </div>
+              )}
             </div>
-          </div>
-
-          {/* Aisle */}
-          <div style={{
-            borderTop: '2px dashed var(--border-color)',
-            margin: '20px 0',
-            position: 'relative'
-          }}>
-            <span style={{
-              position: 'absolute',
-              top: -12,
-              left: '50%',
-              transform: 'translateX(-50%)',
-              backgroundColor: 'var(--card-background)',
-              padding: '0 16px',
-              color: 'var(--text-secondary)',
-              fontSize: '0.85em',
-              fontWeight: 600
-            }}>통로</span>
-          </div>
-
-          {/* Row C */}
-          <div style={{ marginBottom: 12 }}>
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-              <div style={{
-                width: 40,
-                fontWeight: 700,
-                fontSize: '1.1em',
-                color: 'var(--primary-color)',
-                textAlign: 'center'
-              }}>C</div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {seatsByRow['C'].slice(startIdx, endIdx).map((seat) => (
-                  <button
-                    key={seat.id}
-                    type="button"
-                    disabled={seat.reserved}
-                    onClick={() => setSelectedSeat(seat.seatNumber)}
-                    style={{
-                      padding: '12px 16px',
-                      borderRadius: 6,
-                      border: selectedSeat === seat.seatNumber ? '2px solid var(--primary-color)' : seat.reserved ? '1px solid #E57373' : '1px solid var(--border-color)',
-                      backgroundColor: seat.reserved ? '#E57373' : selectedSeat === seat.seatNumber ? 'var(--primary-color)' : '#E0E0E0',
-                      color: seat.reserved || selectedSeat === seat.seatNumber ? 'white' : 'var(--text-primary)',
-                      fontWeight: 600,
-                      fontSize: '0.9em',
-                      cursor: seat.reserved ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.2s ease',
-                      boxShadow: selectedSeat === seat.seatNumber ? 'var(--shadow-md)' : 'none',
-                      transform: selectedSeat === seat.seatNumber ? 'scale(1.05)' : 'scale(1)',
-                      opacity: seat.reserved ? 0.85 : 1,
-                      minWidth: '60px'
-                    }}
-                  >
-                    {seat.seatNumber}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          {/* Row D */}
-          <div style={{ marginBottom: 20 }}>
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-              <div style={{
-                width: 40,
-                fontWeight: 700,
-                fontSize: '1.1em',
-                color: 'var(--primary-color)',
-                textAlign: 'center'
-              }}>D</div>
-              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                {seatsByRow['D'].slice(startIdx, endIdx).map((seat) => (
-                  <button
-                    key={seat.id}
-                    type="button"
-                    disabled={seat.reserved}
-                    onClick={() => setSelectedSeat(seat.seatNumber)}
-                    style={{
-                      padding: '12px 16px',
-                      borderRadius: 6,
-                      border: selectedSeat === seat.seatNumber ? '2px solid var(--primary-color)' : seat.reserved ? '1px solid #E57373' : '1px solid var(--border-color)',
-                      backgroundColor: seat.reserved ? '#E57373' : selectedSeat === seat.seatNumber ? 'var(--primary-color)' : '#E0E0E0',
-                      color: seat.reserved || selectedSeat === seat.seatNumber ? 'white' : 'var(--text-primary)',
-                      fontWeight: 600,
-                      fontSize: '0.9em',
-                      cursor: seat.reserved ? 'not-allowed' : 'pointer',
-                      transition: 'all 0.2s ease',
-                      boxShadow: selectedSeat === seat.seatNumber ? 'var(--shadow-md)' : 'none',
-                      transform: selectedSeat === seat.seatNumber ? 'scale(1.05)' : 'scale(1)',
-                      opacity: seat.reserved ? 0.85 : 1,
-                      minWidth: '60px'
-                    }}
-                  >
-                    {seat.seatNumber}
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
+          ))}
         </div>
 
         {/* Pagination */}
