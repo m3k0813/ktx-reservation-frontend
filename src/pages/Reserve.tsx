@@ -1,7 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { api } from '../api/client';
-import { useAuth } from '../contexts/AuthContext';
 
 type Seat = {
   id: number;
@@ -13,7 +12,6 @@ export default function Reserve() {
   const { trainId } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
-  const { user } = useAuth();
   const [seats, setSeats] = useState<Seat[]>([]);
   const [selectedSeat, setSelectedSeat] = useState((location.state as any)?.selectedSeat || '');
   const [loading, setLoading] = useState(true);
