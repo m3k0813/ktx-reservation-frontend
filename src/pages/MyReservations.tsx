@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../api/client';
+import { reservationApi } from '../api/client';
 import { useAuth } from '../contexts/AuthContext';
 
 type Reservation = {
@@ -23,11 +23,10 @@ export default function MyReservations() {
     const userId = localStorage.getItem('userId');
     if (!userId) return;
     try {
-      const res = await api.get(`/api/v1/reservations?userId=${userId}`);
+      const res = await reservationApi.get(`/api/v1/reservations?userId=${userId}`);
       setReservations(res.data || []);
     } catch (e: any) {
       const errorMessage = e?.response?.data?.message || e?.response?.data || '';
-      // "예매 내역이 없습니다" 메시지는 에러가 아닌 정상 상태로 처리
       if (e?.response?.status === 404 || errorMessage.includes('예매 내역이 없습니다')) {
         setReservations([]);
       } else {
@@ -40,13 +39,12 @@ export default function MyReservations() {
 
   useEffect(() => {
     fetchReservations();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user]);
 
   async function cancelReservation(reservationId: number) {
     if (!window.confirm('예약을 취소하시겠습니까?')) return;
     try {
-      await api.delete(`/api/v1/reservations/${reservationId}`);
+      await reservationApi.delete(`/api/v1/reservations/${reservationId}`);
       await fetchReservations();
     } catch (e: any) {
       alert(e?.response?.data?.message || '예약 취소에 실패했습니다');

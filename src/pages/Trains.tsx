@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { api } from '../api/client';
+import { trainApi } from '../api/client';
 
 type Train = {
   id: number;
@@ -21,7 +21,7 @@ export default function Trains() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await api.get('/api/v1/trains');
+        const res = await trainApi.get('/api/v1/trains');
         setTrains(res.data);
       } catch (e: any) {
         setError(e?.response?.data?.message || '기차 목록을 불러오지 못했습니다');
@@ -31,7 +31,6 @@ export default function Trains() {
     })();
   }, []);
 
-  // Format time only (HH:mm)
   const formatTime = (dateTimeStr: string) => {
     try {
       const date = new Date(dateTimeStr);
@@ -43,7 +42,6 @@ export default function Trains() {
     }
   };
 
-  // Calculate duration between two times
   const calculateDuration = (startTime: string, endTime: string) => {
     try {
       const start = new Date(startTime);

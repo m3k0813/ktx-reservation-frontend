@@ -1,6 +1,6 @@
 import { type FormEvent, useEffect, useState } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { api } from '../api/client';
+import { seatsApi } from '../api/client';
 
 type Seat = {
   id: number;
@@ -19,16 +19,15 @@ export default function Reserve() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(0);
-  const [columnGroup, setColumnGroup] = useState(0); // 0: ABCD, 1: EFGH
-  const seatsPerPage = 20; // 각 행당 최대 좌석 수
+  const [columnGroup, setColumnGroup] = useState(0);
+  const seatsPerPage = 20;
 
   useEffect(() => {
     if (trainId) {
       (async () => {
         try {
-          const res = await api.get(`/api/v1/seats?trainId=${trainId}`);
+          const res = await seatsApi.get(`/api/v1/seats?trainId=${trainId}`);
           setSeats(res.data);
-          // Extract train name from first seat
           if (res.data && res.data.length > 0 && res.data[0].name) {
             setTrainName(res.data[0].name);
           }
@@ -41,10 +40,8 @@ export default function Reserve() {
     }
   }, [trainId]);
 
-  // 선택한 좌석이 있으면 해당 페이지로 이동
   useEffect(() => {
     if (selectedSeat && seats.length > 0) {
-      // Group seats by letter to find the seat's position
       const allLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
       const seatsByRow: { [key: string]: Seat[] } = {};
       allLetters.forEach(letter => seatsByRow[letter] = []);
@@ -56,7 +53,6 @@ export default function Reserve() {
         }
       });
 
-      // Sort seats within each row by number
       Object.keys(seatsByRow).forEach((row) => {
         seatsByRow[row].sort((a, b) => {
           const numA = parseInt(a.seatNumber.match(/\d+/)?.[0] || '0');
@@ -65,14 +61,12 @@ export default function Reserve() {
         });
       });
 
-      // Find the selected seat's index in its row
       const letter = selectedSeat.match(/[A-Z]/i)?.[0]?.toUpperCase();
       if (letter && seatsByRow[letter]) {
         const seatIndex = seatsByRow[letter].findIndex(s => s.seatNumber === selectedSeat);
         if (seatIndex !== -1) {
           const pageNum = Math.floor(seatIndex / seatsPerPage);
           setCurrentPage(pageNum);
-          // Set column group based on letter
           const letterGroups = ['ABCD', 'EFGH', 'IJKL', 'MNOP', 'QRST', 'UVWX', 'YZ'];
           const groupIndex = letterGroups.findIndex(group => group.includes(letter));
           if (groupIndex !== -1) {
@@ -86,26 +80,22 @@ export default function Reserve() {
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (!selectedSeat) return;
-    // 확정 페이지로 이동
     navigate(`/confirm/${trainId}/${selectedSeat}`);
   }
 
   if (loading) return <p className="loading-text">좌석 정보를 불러오는 중...</p>;
 
-  // Group seats by letter (A-Z)
   const allLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
   const seatsByRow: { [key: string]: Seat[] } = {};
   allLetters.forEach(letter => seatsByRow[letter] = []);
 
   seats.forEach((seat) => {
-    // Extract letter from seat number (supports both "1A" and "A1" formats)
     const letter = seat.seatNumber.match(/[A-Z]/i)?.[0]?.toUpperCase();
     if (letter && seatsByRow[letter]) {
       seatsByRow[letter].push(seat);
     }
   });
 
-  // Sort seats within each row by number
   Object.keys(seatsByRow).forEach((row) => {
     seatsByRow[row].sort((a, b) => {
       const numA = parseInt(a.seatNumber.match(/\d+/)?.[0] || '0');
@@ -114,17 +104,14 @@ export default function Reserve() {
     });
   });
 
-  // Calculate pagination
   const maxSeatsInAnyRow = Math.max(...Object.values(seatsByRow).map(row => row.length));
   const totalPages = Math.ceil(maxSeatsInAnyRow / seatsPerPage);
   const startIdx = currentPage * seatsPerPage;
   const endIdx = startIdx + seatsPerPage;
 
-  // Determine which columns to show based on columnGroup
   const letterGroups = ['ABCD', 'EFGH', 'IJKL', 'MNOP', 'QRST', 'UVWX', 'YZ'];
   const currentRows = letterGroups[columnGroup].split('');
 
-  // Find the last group with seats
   let lastGroupWithSeats = 0;
   for (let i = letterGroups.length - 1; i >= 0; i--) {
     const hasSeats = letterGroups[i].split('').some(letter => seatsByRow[letter].length > 0);
@@ -134,7 +121,6 @@ export default function Reserve() {
     }
   }
 
-  // Check if there are any seats beyond ABCD
   const hasMultipleGroups = letterGroups.slice(1).some(group =>
     group.split('').some(letter => seatsByRow[letter].length > 0)
   );
@@ -160,9 +146,7 @@ export default function Reserve() {
         </div>
       </div>
 
-      {/* Seat Selection Grid - KTX Style */}
       <div className="card" style={{ padding: 32, marginBottom: 24 }}>
-        {/* Column Group Toggle */}
         {hasMultipleGroups && (
           <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, marginBottom: 24 }}>
             <button
@@ -228,11 +212,9 @@ export default function Reserve() {
           </div>
         </div>
 
-        {/* Seat layout by rows */}
         <div style={{ margin: '0 auto', maxWidth: '100%', overflowX: 'auto' }}>
           {currentRows.map((row, idx) => (
             <div key={row}>
-              {/* Row */}
               <div style={{ marginBottom: idx === 1 ? 20 : 12 }}>
                 <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
                   <div style={{
@@ -274,7 +256,6 @@ export default function Reserve() {
                 </div>
               </div>
 
-              {/* Aisle between 2nd and 3rd row */}
               {idx === 1 && (
                 <div style={{
                   borderTop: '2px dashed var(--border-color)',
@@ -298,7 +279,6 @@ export default function Reserve() {
           ))}
         </div>
 
-        {/* Pagination */}
         {totalPages > 1 && (
           <div style={{
             display: 'flex',
@@ -350,7 +330,6 @@ export default function Reserve() {
         )}
       </div>
 
-      {/* Reservation Form */}
       <form onSubmit={onSubmit}>
         <div className="card" style={{ padding: 24 }}>
           {selectedSeat ? (

@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { api } from '../api/client';
+import { userApi } from '../api/client';
 
 type User = {
   id: string | number;
@@ -34,32 +34,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (token) {
       const userId = localStorage.getItem('userId');
       if (userId) {
-        // Since backend doesn't have /users/me endpoint yet, we'll use stored info
         setUser({ id: userId, email: '', name: '' });
       }
       setLoading(false);
     } else {
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [token]);
 
   async function login(data: LoginPayload) {
-    const res = await api.post('/api/v1/users/login', data);
+    const res = await userApi.post('/api/v1/users/login', data);
     const userId: number = res.data;
     if (userId) {
-      // Store userId as token for now (backend returns userId instead of JWT)
       localStorage.setItem('token', userId.toString());
       localStorage.setItem('userId', userId.toString());
       setToken(userId.toString());
-      // Set user info directly since we have userId
       setUser({ id: userId.toString(), email: data.username, name: data.username });
     }
   }
 
   async function signup(data: SignupPayload) {
-    await api.post('/api/v1/users/sign-up', data);
-    // Optionally auto-login after signup if API returns token
+    await userApi.post('/api/v1/users/sign-up', data);
   }
 
   function logout() {
@@ -71,8 +66,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function refreshMe() {
-    // Backend doesn't have /users/me endpoint yet
-    // User info is stored in localStorage
     const userId = localStorage.getItem('userId');
     if (userId) {
       setUser({ id: userId, email: '', name: '' });

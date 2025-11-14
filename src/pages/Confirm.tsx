@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
-import { api } from '../api/client';
+import { trainApi, reservationApi } from '../api/client';
 
 type Train = {
   id: number;
@@ -23,7 +23,7 @@ export default function Confirm() {
   useEffect(() => {
     (async () => {
       try {
-        const res = await api.get('/api/v1/trains');
+        const res = await trainApi.get('/api/v1/trains');
         const trains = res.data;
         const foundTrain = trains.find((t: Train) => t.id === Number(trainId));
         if (foundTrain) {
@@ -74,7 +74,7 @@ export default function Confirm() {
       return;
     }
     try {
-      await api.post(`/api/v1/reservations?userId=${userId}`, {
+      await reservationApi.post(`/api/v1/reservations?userId=${userId}`, {
         trainId: Number(trainId),
         seatNumber: seatNumber
       });
